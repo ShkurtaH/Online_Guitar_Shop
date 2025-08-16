@@ -4,7 +4,7 @@ import { GET_MODEL } from "../api/queries";
 import Tabs from "../components/Tabs";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-
+import SplitHero from "../components/SplitHero";
 export default function DetailsPage() {
   const { brandId, modelId } = useParams();
   const { t } = useTranslation();
@@ -78,22 +78,14 @@ export default function DetailsPage() {
 
   return (
     <section className="details">
-      <div className="hero-split">
-        <div>
-          <h1 className="title">{g.name}</h1>
-          {g.type && <p style={{ marginTop: 4 }}>{g.type}</p>}
-          {g.price != null && (
-            <p style={{ marginTop: 8, fontWeight: 700 }}>
-              ${Number(g.price).toLocaleString()}
-            </p>
-          )}
-        </div>
-        <div className="gtr-hero">
-          {g.image && <img src={g.image} alt={g.name} />}
-        </div>
-      </div>
-
       <Tabs tabs={tabs} />
+      <SplitHero
+        heading={g.name}
+        subtext={g.description}
+        rightType="image"
+        imageUrl={g.image}
+        showBack={true}
+      />
     </section>
   );
 }
