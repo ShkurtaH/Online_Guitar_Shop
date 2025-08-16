@@ -1,91 +1,145 @@
-import { useParams } from "react-router-dom";
+// src/pages/DetailsPage.jsx
 import { useQuery } from "@apollo/client";
-import { GET_MODEL } from "../api/queries";
-import Tabs from "../components/Tabs";
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useMemo, useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import SplitHero from "../components/SplitHero";
+import { GET_MODEL } from "../api/queries";
+
 export default function DetailsPage() {
   const { brandId, modelId } = useParams();
-  const { t } = useTranslation();
+
+  // Hook 1: data
   const { data, loading, error } = useQuery(GET_MODEL, {
     variables: { brandId, modelId },
   });
-  const [visible, setVisible] = useState(2);
-
-  if (loading) return <p className="state">{t("loading")}</p>;
-  if (error) return <p className="state error">{t("error")}</p>;
-
   const g = data?.findUniqueModel;
-  if (!g) return null;
 
-  const specs = g.specs || {};
-  const specRows = [
-    ["Body wood", specs.bodyWood],
-    ["Neck wood", specs.neckWood],
-    ["Fingerboard", specs.fingerboardWood],
-    ["Pickups", specs.pickups],
-    ["Tuners", specs.tuners],
-    ["Scale length", specs.scaleLength],
-    ["Bridge", specs.bridge],
-  ].filter(([, v]) => v);
+  // Hook 2: tab state
+  const [tab, setTab] = useState("specs");
 
-  const musicians = Array.isArray(g.musicians) ? g.musicians : [];
+  // Hook 3: specs memo (safe when g is undefined)
+  const specs = useMemo(() => {
+    const s = g?.specs || {};
+    return [
+      ["Body Wood", s.bodyWood],
+      ["Neck Wood", s.neckWood],
+      ["Fingerboard", s.fingerboardWood],
+      ["Pickups", s.pickups],
+      ["Tuners", s.tuners],
+      ["Scale Length", s.scaleLength],
+      ["Bridge", s.bridge],
+    ].filter(([, v]) => !!v);
+  }, [g]);
 
-  const tabs = [
-    {
-      label: t("specs"),
-      content: (
-        <div className="specs">
-          {specRows.length ? (
-            <ul>
-              {specRows.map(([k, v]) => (
-                <li key={k}>
-                  <strong>{k}:</strong> {v}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No specifications provided.</p>
-          )}
-        </div>
-      ),
-    },
-    {
-      label: t("whoPlaysIt"),
-      content: (
-        <div className="musicians">
-          <div className="grid mus-grid">
-            {musicians.slice(0, visible).map((m, i) => (
-              <figure key={`${m.name}-${i}`} className="artist-card">
-                {m.musicianImage && <img src={m.musicianImage} alt={m.name} />}
-                <figcaption>
-                  <div>{m.name}</div>
-                  {m.bands?.length ? <small>{m.bands.join(", ")}</small> : null}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-          {musicians.length > visible && (
-            <div className="dots">
-              <button onClick={() => setVisible((v) => v + 2)}>• •</button>
-            </div>
-          )}
-        </div>
-      ),
-    },
-  ];
+  // Hooks 4–6: musicians paging (always defined)
+  const allMusicians = g?.musicians || [];
+  const pageSize = 2;
+  const [mPage, setMPage] = useState(1);
+  const mTotalPages = Math.max(1, Math.ceil(allMusicians.length / pageSize));
+  const mStart = (mPage - 1) * pageSize;
+  const musicians = allMusicians.slice(mStart, mStart + pageSize);
+  const dotsCount = Math.max(1, mTotalPages);
+  // Hook 7: clamp/reset musician page when model changes or length changes
+  useEffect(() => {
+    setMPage(1);
+  }, [modelId, allMusicians.length]);
 
+  /* ---- JSX (branch AFTER all hooks have run) ---- */
   return (
-    <section className="details">
-      <Tabs tabs={tabs} />
+    <>
       <SplitHero
-        heading={g.name}
-        subtext={g.description}
+        heading={g?.name || (loading ? "" : "Unknown model")}
         rightType="image"
-        imageUrl={g.image}
-        showBack={true}
+        imageUrl={g?.image}
+        subtext=""
+        showBack
       />
-    </section>
+
+      <section className="details">
+        {error && <p className="state error">Failed to load.</p>}
+
+        {!error && (
+          <>
+            {/* Tabs */}
+            <div className="tabs">
+              <button
+                className={`tab ${tab === "specs" ? "is-active" : ""}`}
+                onClick={() => setTab("specs")}
+                disabled={loading}
+              >
+                Specification
+              </button>
+              <button
+                className={`tab ${tab === "players" ? "is-active" : ""}`}
+                onClick={() => setTab("players")}
+                disabled={loading}
+              >
+                Who plays it?
+              </button>
+            </div>
+
+            {/* Loading body */}
+            {loading && <p className="state">Loading…</p>}
+
+            {/* SPECIFICATION */}
+            {!loading && tab === "specs" && (
+              <div className="specs">
+                {g?.description && (
+                  <p className="specs-lead">{g.description}</p>
+                )}
+                {!!specs.length && (
+                  <ul className="specs-list">
+                    {specs.map(([k, v]) => (
+                      <li key={k}>
+                        <strong>{k}:</strong> {v}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {/* MUSICIANS */}
+            {tab === "players" && (
+              <div className="musicians">
+                <div className="musicians-grid">
+                  {musicians.map((m, i) => (
+                    <article className="polaroid" key={`${m.name}-${i}`}>
+                      <div className="polaroid-inner">
+                        <div className="polaroid-photo">
+                          {m.musicianImage && (
+                            <img
+                              src={m.musicianImage}
+                              alt={m.name}
+                              loading="lazy"
+                            />
+                          )}
+                        </div>
+                        <div className="polaroid-caption">{m.name}</div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="dots-only">
+                  {Array.from({ length: dotsCount }).map((_, i) => {
+                    const n = i + 1;
+                    return (
+                      <button
+                        key={n}
+                        className={`dot ${mPage === n ? "is-active" : ""}`}
+                        onClick={() => setMPage(n)}
+                        disabled={mTotalPages === 1} // single page: dot is inert
+                        aria-label={`Show set ${n}`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    </>
   );
 }
